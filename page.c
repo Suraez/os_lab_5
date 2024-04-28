@@ -2,6 +2,9 @@
 #include <linux/module.h> /* Needed by all modules */ 
 #include <linux/printk.h> /* Needed for pr_info() */ 
 #include <linux/kthread.h>
+#include <linux/slab.h> // Needed for alloc_pages and __free_pages functions
+#include <linux/time.h> // Needed for timespec and ktime_get functions
+#include <linux/timekeeping.h>
 
 static struct task_struct *my_thread;
 
@@ -18,8 +21,25 @@ struct my_struct {
 
 static int thread_func(void *) {
     struct my_struct my_data;
+    struct timespec64 start_time, end_time;
+    unsigned long elapsed_time;
+
     printk(KERN_INFO "Value of objnum is %u\n", objnum);
     printk(KERN_INFO "Size of my_struct: %zu bytes\n", sizeof(my_data));
+
+    unsigned long pages_needed = (objnum * sizeof(struct my_struct) + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    ktime_get_real_ts64(&start_time);
+
+    // allocating pages
+    struct page *pages = alloc_pages(GFP_KERNEL, get_order(pages_needed * PAGE_SIZE));
+    // deallocating pages
+    __free_pages(pages, get_order(pages_needed * PAGE_SIZE));
+
+    ktime_get_real_ts64(&end_time);
+
+    elapsed_time = timespec64_to_ns(&end_time) - timespec64_to_ns(&start_time);
+    printk(KERN_INFO "Time taken for memory allocation: %lu ns\n", elapsed_time);
     return 0;
 }
 
