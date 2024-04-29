@@ -12,6 +12,7 @@ static unsigned int objnum = 2000;
 
 module_param(objnum, int, 0);
 
+static struct kmem_cache *my_cache;
 
 struct my_struct {
     unsigned int num[8];
@@ -20,6 +21,7 @@ struct my_struct {
 
 
 static int thread_func(void *) {
+    struct my_struct *ptr;
     struct my_struct my_data;
     struct timespec64 start_time, end_time;
     unsigned long elapsed_time;
@@ -32,14 +34,14 @@ static int thread_func(void *) {
         // Allocate and free memory 'objnum' times
     for (int i = 0; i < objnum; i++) {
         // Allocate memory
-        struct my_struct *ptr = (struct my_struct *)kmalloc(sizeof (struct my_struct), GFP_KERNEL);
+        ptr = (struct my_struct *)kmem_cache_alloc(my_cache, GFP_KERNEL);
         if (!ptr) {
             printk(KERN_ERR "Memory allocation failed\n");
             return -ENOMEM;
         }
 
-        // Free memory
-        kfree(ptr);
+        // Free memory from cache
+        kmem_cache_free(my_cache, ptr);
     }
 
     ktime_get_real_ts64(&end_time);
@@ -49,25 +51,37 @@ static int thread_func(void *) {
     return 0;
 }
 
-static int __init kmem_init(void) 
+static int __init cache_init(void) 
 { 
-    // printk(KERN_INFO "page module loaded\n");
 
     // thread binding
     my_thread = kthread_create(thread_func, NULL, "page_thread");
     kthread_bind(my_thread, 0); // binding the thread to CPU core 0
     wake_up_process(my_thread); // start the thread
 
+    // instantiating cache
+    my_cache = kmem_cache_create("my_cache", sizeof(struct my_struct), 0, 0, NULL);
+    if (!my_cache) {
+        printk(KERN_ERR "Failed to create cache\n");
+        return -ENOMEM;
+    }
+
     return 0; 
 } 
  
-static void __exit kmem_exit(void) 
+static void __exit cache_exit(void) 
 { 
     printk(KERN_INFO "Value of objnum is %u\n", objnum);
 
+    // cache free
+    if (my_cache) {
+      kmem_cache_destroy(my_cache);  
+    } 
+
+
 } 
  
-module_init(kmem_init); 
-module_exit(kmem_exit); 
+module_init(cache_init); 
+module_exit(cache_exit); 
  
 MODULE_LICENSE("GPL");
