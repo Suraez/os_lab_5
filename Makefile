@@ -1,4 +1,4 @@
-obj-m += page_alloc.o 
+obj-m += page.o 
 obj-m += kmem_alloc.o
 obj-m += cache_alloc.o
 all: 
